@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
+import { authService } from "@/lib/auth";
 
 interface ChartData {
   time: string;
@@ -7,39 +9,24 @@ interface ChartData {
 
 interface ChartWidgetProps {
   data?: ChartData[];
+  symbol?: string;
+  range?: string;
   title?: string;
   height?: number;
 }
 
-// Generate sample chart data for demonstration with more realistic market behavior
-const generateSampleData = (): ChartData[] => {
-  const data: ChartData[] = [];
-  const now = new Date();
-  let baseValue = 125000;
-  
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    // More realistic market volatility with trending behavior
-    const dailyChange = (Math.random() - 0.48) * 0.03; // Slight bullish bias
-    baseValue = baseValue * (1 + dailyChange);
-    
-    data.push({
-      time: date.toLocaleDateString(),
-      value: Math.round(baseValue),
-    });
-  }
-  
-  return data;
-};
+export function ChartWidget({ data, symbol = "SPY", range = "1mo", title = "Portfolio Performance", height = 320 }: ChartWidgetProps) {
+  const { data: liveData } = useQuery<ChartData[]>({
+    queryKey: [`/api/market/chart/${symbol}?range=${range}`],
+    enabled: !data && authService.isAuthenticated(),
+    staleTime: 60_000,
+  });
 
-export function ChartWidget({ data, title = "Portfolio Performance", height = 320 }: ChartWidgetProps) {
-  const chartData = data || generateSampleData();
-  
-  // Calculate if portfolio is gaining or losing
+  const chartData = data || liveData || [];
   const firstValue = chartData[0]?.value || 0;
   const lastValue = chartData[chartData.length - 1]?.value || 0;
-  const isGaining = lastValue > firstValue;
-  const changePercent = ((lastValue - firstValue) / firstValue * 100).toFixed(2);
+  const isGaining = lastValue >= firstValue;
+  const changePercent = firstValue ? ((lastValue - firstValue) / firstValue * 100).toFixed(2) : "0.00";
 
   return (
     <div className="w-full" style={{ height }}>
@@ -49,10 +36,15 @@ export function ChartWidget({ data, title = "Portfolio Performance", height = 32
             isGaining ? 'bg-green-500' : 'bg-red-500'
           }`}></div>
           <span className="text-sm text-muted-foreground">
-            {isGaining ? 'Up' : 'Down'} {Math.abs(Number(changePercent))}% this period
+            {title} · {isGaining ? 'Up' : 'Down'} {Math.abs(Number(changePercent))}% this period
           </span>
         </div>
       </div>
+      {chartData.length === 0 ? (
+        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+          Loading live chart…
+        </div>
+      ) : (
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData}>
           <defs>
@@ -82,7 +74,8 @@ export function ChartWidget({ data, title = "Portfolio Performance", height = 32
             fontSize={12}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={(value) => value >= 1000 ? `$${(value / 1000).toFixed(0)}k` : `$${value}`}
           />
           <Tooltip
             contentStyle={{
@@ -94,7 +87,7 @@ export function ChartWidget({ data, title = "Portfolio Performance", height = 32
             }}
             formatter={(value: number) => [
               `$${value.toLocaleString()}`, 
-              "Portfolio Value"
+              symbol
             ]}
             labelStyle={{ color: "hsl(var(--muted-foreground))" }}
           />
@@ -114,6 +107,7 @@ export function ChartWidget({ data, title = "Portfolio Performance", height = 32
           />
         </AreaChart>
       </ResponsiveContainer>
+      )}
     </div>
   );
 }

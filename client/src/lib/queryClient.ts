@@ -1,10 +1,36 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authService } from "./auth";
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const contentType = res.headers.get("content-type") || "";
+    let message = res.statusText;
+
+    if (contentType.includes("application/json")) {
+      const payload = (await res.json()) as { message?: string };
+      message = payload.message || message;
+    } else {
+      message = (await res.text()) || message;
+    }
+
+    throw new ApiError(message, res.status);
   }
 }
 
@@ -25,7 +51,7 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -50,7 +76,7 @@ export const getQueryFn: <T>(options: {
       headers.Authorization = authHeaders.Authorization;
     }
 
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(apiUrl(queryKey.join("/") as string), {
       headers,
       credentials: "include",
     });
@@ -69,8 +95,8 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      staleTime: 30_000,
+      retry: 1,
     },
     mutations: {
       retry: false,

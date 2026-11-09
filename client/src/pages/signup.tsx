@@ -34,6 +34,8 @@ export default function Signup() {
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
   const { toast } = useToast();
 
   const form = useForm<SignupFormData>({
@@ -52,12 +54,17 @@ export default function Signup() {
       return response.json();
     },
     onSuccess: (data) => {
-      authService.setToken(data.token);
+      if (!data.requiresVerification && data.token) {
+        authService.setToken(data.token);
+        toast({ title: "Account created", description: "Welcome to SOG TradePro!" });
+        navigate("/dashboard");
+        return;
+      }
+      setVerificationEmail(data.email);
       toast({
-        title: "Account created successfully",
-        description: "Welcome to TradePro!",
+        title: "Check your email",
+        description: "Enter the six-digit code. It expires in 3 minutes.",
       });
-      navigate("/dashboard");
     },
     onError: (error: any) => {
       toast({
@@ -65,6 +72,40 @@ export default function Signup() {
         description: error.message || "Please try again",
         variant: "destructive",
       });
+    },
+  });
+
+  const verificationMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/auth/verify-email", {
+        email: verificationEmail,
+        code: verificationCode,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      authService.setToken(data.token);
+      toast({ title: "Email verified", description: "Welcome to SOG TradePro!" });
+      navigate("/dashboard");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/auth/resend-verification", {
+        email: verificationEmail,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setVerificationCode("");
+      toast({ title: "New code sent", description: "The new code expires in 3 minutes." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not resend code", description: error.message, variant: "destructive" });
     },
   });
 
@@ -95,8 +136,36 @@ export default function Signup() {
 
         <Card className="glass-card">
           <CardContent className="p-8">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {verificationEmail ? (
+              <div className="space-y-6">
+                <p className="text-sm text-muted-foreground">
+                  We sent a six-digit code to <strong>{verificationEmail}</strong>.
+                </p>
+                <Input
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ""))}
+                />
+                <Button
+                  className="w-full"
+                  disabled={verificationMutation.isPending || verificationCode.length !== 6}
+                  onClick={() => verificationMutation.mutate()}
+                >
+                  {verificationMutation.isPending ? "Verifying..." : "Verify email"}
+                </Button>
+                <Button
+                  variant="link"
+                  className="w-full"
+                  onClick={() => resendMutation.mutate()}
+                  disabled={resendMutation.isPending}
+                >
+                  {resendMutation.isPending ? "Sending..." : "Resend code"}
+                </Button>
+              </div>
+            ) : <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" autoComplete="on">
                 <FormField
                   control={form.control}
                   name="fullName"
@@ -106,6 +175,7 @@ export default function Signup() {
                       <FormControl>
                         <Input
                           {...field}
+                          autoComplete="name"
                           placeholder="Enter your full name"
                           className="bg-input border-border"
                           data-testid="input-fullname"
@@ -126,6 +196,7 @@ export default function Signup() {
                         <Input
                           {...field}
                           type="email"
+                          autoComplete="email"
                           placeholder="Enter your email"
                           className="bg-input border-border"
                           data-testid="input-email"
@@ -147,6 +218,7 @@ export default function Signup() {
                           <Input
                             {...field}
                             type={showPassword ? "text" : "password"}
+                            autoComplete="new-password"
                             placeholder="Create a password"
                             className="bg-input border-border pr-10"
                             data-testid="input-password"
@@ -183,6 +255,7 @@ export default function Signup() {
                           <Input
                             {...field}
                             type={showConfirmPassword ? "text" : "password"}
+                            autoComplete="new-password"
                             placeholder="Confirm your password"
                             className="bg-input border-border pr-10"
                             data-testid="input-confirm-password"
@@ -216,7 +289,7 @@ export default function Signup() {
                       Terms of Service
                     </a>{" "}
                     and{" "}
-                    <a href="#" className="text-primary hover:underline">
+                    <a href="/privacy" className="text-primary hover:underline">
                       Privacy Policy
                     </a>
                   </label>
@@ -231,7 +304,7 @@ export default function Signup() {
                   {signupMutation.isPending ? "Creating Account..." : "Create Account"}
                 </Button>
               </form>
-            </Form>
+            </Form>}
 
             <div className="mt-6 text-center">
               <p className="text-muted-foreground">

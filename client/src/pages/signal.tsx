@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { authService } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Zap, 
   TrendingUp, 
@@ -55,18 +56,9 @@ export default function SignalPage() {
   );
 
   const executeSignal = async (signalId: string) => {
-    const token = authService.getToken();
     try {
-      const response = await fetch(`/api/signals/${signalId}/execute`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      if (response.ok) {
-        // Refresh signals
-        window.location.reload();
-      }
+      await apiRequest("POST", `/api/signals/${signalId}/execute`);
+      window.location.reload();
     } catch (error) {
       console.error("Failed to execute signal:", error);
     }

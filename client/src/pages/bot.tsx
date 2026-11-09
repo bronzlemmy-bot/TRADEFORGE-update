@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authService } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Bot, 
   Play, 
@@ -59,16 +60,7 @@ export default function BotPage() {
 
   const createBotMutation = useMutation({
     mutationFn: async (botData: any) => {
-      const token = authService.getToken();
-      const response = await fetch("/api/bots", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify(botData),
-      });
-      if (!response.ok) throw new Error("Failed to create bot");
+      const response = await apiRequest("POST", "/api/bots", botData);
       return response.json();
     },
     onSuccess: () => {
@@ -80,14 +72,7 @@ export default function BotPage() {
 
   const toggleBotMutation = useMutation({
     mutationFn: async ({ botId, action }: { botId: string; action: string }) => {
-      const token = authService.getToken();
-      const response = await fetch(`/api/bots/${botId}/${action}`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) throw new Error(`Failed to ${action} bot`);
+      const response = await apiRequest("POST", `/api/bots/${botId}/${action}`);
       return response.json();
     },
     onSuccess: () => {

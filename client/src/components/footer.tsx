@@ -5,8 +5,6 @@ import { Separator } from "@/components/ui/separator";
 import { 
   TrendingUp, 
   Mail, 
-  Phone, 
-  MapPin, 
   Twitter, 
   Facebook, 
   Linkedin, 
@@ -51,7 +49,7 @@ export function FooterTop() {
                 <TrendingUp className="text-white text-lg" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                TradePro
+                SOG TradePro
               </span>
             </div>
             <p className="text-muted-foreground mb-6 leading-relaxed">
@@ -60,16 +58,8 @@ export function FooterTop() {
             </p>
             <div className="space-y-3 text-sm">
               <div className="flex items-center space-x-3">
-                <MapPin className="w-4 h-4 text-primary" />
-                <span>New York, NY 10001, USA</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Phone className="w-4 h-4 text-primary" />
-                <span>+1 (555) 123-4567</span>
-              </div>
-              <div className="flex items-center space-x-3">
                 <Mail className="w-4 h-4 text-primary" />
-                <span>support@tradepro.com</span>
+                <span>Use the in-app support channel</span>
               </div>
             </div>
           </motion.div>
@@ -121,7 +111,7 @@ export function FooterTop() {
               ].map((link) => (
                 <li key={link}>
                   <a 
-                    href="#" 
+                    href={link === 'Privacy Policy' ? '/privacy' : '#'}
                     className="text-muted-foreground hover:text-primary transition-colors cursor-pointer"
                   >
                     {link}
@@ -222,7 +212,7 @@ export function FooterBottom() {
       <div className="container mx-auto px-6">
         <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <span>© 2024 TradePro. All rights reserved.</span>
+            <span>© 2026 SOG TradePro. All rights reserved.</span>
             <Separator orientation="vertical" className="h-4" />
             <span>Licensed & Regulated</span>
           </div>

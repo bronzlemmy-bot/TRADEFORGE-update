@@ -124,8 +124,8 @@ export default function Home() {
           transition={{ duration: 0.6 }}
           viewport={{ once: true }}
         >
-          <h2 className="text-4xl font-bold mb-4">Why Choose TradePro?</h2>
-          <p className="text-xl text-muted-foreground">Professional trading tools designed for modern investors</p>
+          <h2 className="text-4xl font-bold mb-4">Why Choose SOG TradePro?</h2>
+          <p className="text-xl text-muted-foreground">Professional tools connected to live market data</p>
         </motion.div>
         
         <motion.div 

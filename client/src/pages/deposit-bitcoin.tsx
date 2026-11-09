@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Bitcoin, 
   ArrowDownToLine,
@@ -39,12 +41,14 @@ interface DepositHistory {
   requiredConfirmations: number;
   createdAt: string;
   network: string;
+  usdValue?: number;
 }
 
 interface WalletData {
   address: string;
   balance: number;
   pendingDeposits: number;
+  exchangeRate: number;
 }
 
 export default function DepositBitcoinPage() {
@@ -54,6 +58,7 @@ export default function DepositBitcoinPage() {
   const [showQrCode, setShowQrCode] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
@@ -64,6 +69,23 @@ export default function DepositBitcoinPage() {
   const { data: walletData, isLoading: walletLoading } = useQuery<WalletData>({
     queryKey: ["/api/wallet/bitcoin"],
     enabled: authService.isAuthenticated(),
+  });
+
+  const depositMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      const response = await apiRequest("POST", "/api/wallet/bitcoin/deposits", { amount });
+      return response.json();
+    },
+    onSuccess: () => {
+      setDepositAmount("");
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/bitcoin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/bitcoin/deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
+      toast({ title: "Deposit recorded", description: "Your Bitcoin deposit has been added to the wallet." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Deposit failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const { data: depositHistory, isLoading: historyLoading } = useQuery<DepositHistory[]>({
@@ -188,10 +210,19 @@ export default function DepositBitcoinPage() {
                 <Label>Estimated USD Value</Label>
                 <div className="mt-2 p-3 bg-muted/20 rounded-lg">
                   <p className="text-lg font-semibold">
-                    ${depositAmount ? (parseFloat(depositAmount) * 43250).toFixed(2) : '0.00'}
+                    ${depositAmount && walletData?.exchangeRate ? (parseFloat(depositAmount) * walletData.exchangeRate).toFixed(2) : '0.00'}
                   </p>
-                  <p className="text-xs text-muted-foreground">Rate: $43,250/BTC</p>
+                  <p className="text-xs text-muted-foreground">
+                    Rate: ${walletData?.exchangeRate?.toLocaleString() || "—"}/BTC
+                  </p>
                 </div>
+                <Button
+                  className="mt-4"
+                  onClick={() => depositMutation.mutate(Number(depositAmount))}
+                  disabled={depositMutation.isPending || !depositAmount || Number(depositAmount) <= 0}
+                >
+                  {depositMutation.isPending ? "Recording..." : "Record deposit"}
+                </Button>
               </div>
             </div>
             <div className="mt-4 flex space-x-2">
@@ -482,7 +513,7 @@ export default function DepositBitcoinPage() {
                           <div>
                             <p className="font-medium">{deposit.amount} BTC</p>
                             <p className="text-sm text-muted-foreground">
-                              ${(deposit.amount * 43250).toFixed(2)} USD
+                              ${(deposit.usdValue ?? deposit.amount * (walletData?.exchangeRate || 0)).toFixed(2)} USD
                             </p>
                           </div>
                         </div>

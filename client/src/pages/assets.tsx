@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +23,8 @@ import {
   Eye,
   MoreHorizontal
 } from "lucide-react";
+import { authService } from "@/lib/auth";
+import { TradeDialog } from "@/components/trade-dialog";
 
 interface Asset {
   id: string;
@@ -35,168 +40,6 @@ interface Asset {
   value?: number;
   icon?: string;
 }
-
-const userAssets: Asset[] = [
-  {
-    id: "1",
-    symbol: "AAPL",
-    name: "Apple Inc.",
-    type: "stock",
-    price: 175.24,
-    change: 2.15,
-    changePercent: 1.24,
-    marketCap: "2.8T",
-    volume: "45.2M",
-    holdings: 10,
-    value: 1752.40,
-    icon: "🍎"
-  },
-  {
-    id: "2",
-    symbol: "BTC",
-    name: "Bitcoin",
-    type: "crypto",
-    price: 67234.12,
-    change: 1542.33,
-    changePercent: 2.34,
-    marketCap: "1.3T",
-    volume: "28.5B",
-    holdings: 0.025,
-    value: 1680.85,
-    icon: "₿"
-  },
-  {
-    id: "3",
-    symbol: "TSLA",
-    name: "Tesla Inc.",
-    type: "stock",
-    price: 242.68,
-    change: -5.42,
-    changePercent: -2.18,
-    marketCap: "773B",
-    volume: "78.3M",
-    holdings: 5,
-    value: 1213.40,
-    icon: "🚗"
-  },
-  {
-    id: "4",
-    symbol: "ETH",
-    name: "Ethereum",
-    type: "crypto",
-    price: 3456.78,
-    change: 89.23,
-    changePercent: 2.65,
-    marketCap: "415B",
-    volume: "15.2B",
-    holdings: 0.8,
-    value: 2765.42,
-    icon: "Ξ"
-  },
-  {
-    id: "5",
-    symbol: "GOVT",
-    name: "US Treasury Bond ETF",
-    type: "bond",
-    price: 23.45,
-    change: 0.12,
-    changePercent: 0.51,
-    marketCap: "4.2B",
-    volume: "2.1M",
-    holdings: 100,
-    value: 2345.00,
-    icon: "🏛️"
-  },
-  {
-    id: "6",
-    symbol: "GLD",
-    name: "Gold ETF",
-    type: "commodity",
-    price: 189.23,
-    change: 3.45,
-    changePercent: 1.86,
-    marketCap: "67B",
-    volume: "8.9M",
-    holdings: 15,
-    value: 2838.45,
-    icon: "🥇"
-  }
-];
-
-const availableAssets: Asset[] = [
-  {
-    id: "7",
-    symbol: "MSFT",
-    name: "Microsoft Corporation",
-    type: "stock",
-    price: 421.56,
-    change: 8.23,
-    changePercent: 1.99,
-    marketCap: "3.1T",
-    volume: "32.1M",
-    icon: "🖥️"
-  },
-  {
-    id: "8",
-    symbol: "GOOGL",
-    name: "Alphabet Inc.",
-    type: "stock",
-    price: 156.78,
-    change: -2.34,
-    changePercent: -1.47,
-    marketCap: "1.9T",
-    volume: "28.7M",
-    icon: "🔍"
-  },
-  {
-    id: "9",
-    symbol: "ADA",
-    name: "Cardano",
-    type: "crypto",
-    price: 0.45,
-    change: 0.03,
-    changePercent: 7.14,
-    marketCap: "15.8B",
-    volume: "450M",
-    icon: "₳"
-  },
-  {
-    id: "10",
-    symbol: "SOL",
-    name: "Solana",
-    type: "crypto",
-    price: 156.89,
-    change: 12.45,
-    changePercent: 8.62,
-    marketCap: "73.2B",
-    volume: "2.8B",
-    icon: "◎"
-  },
-  {
-    id: "11",
-    symbol: "TIPS",
-    name: "Treasury Inflation-Protected Securities",
-    type: "bond",
-    price: 112.34,
-    change: 0.67,
-    changePercent: 0.60,
-    marketCap: "78.5B",
-    volume: "1.2M",
-    icon: "📈"
-  },
-  {
-    id: "12",
-    symbol: "OIL",
-    name: "Crude Oil ETF",
-    type: "commodity",
-    price: 78.45,
-    change: -1.23,
-    changePercent: -1.54,
-    marketCap: "2.3B",
-    volume: "5.6M",
-    icon: "🛢️"
-  }
-];
 
 const getAssetIcon = (type: string) => {
   switch (type) {
@@ -227,21 +70,39 @@ const fadeInUp = {
 };
 
 export default function Assets() {
+  const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAssetType, setSelectedAssetType] = useState<string>("all");
+  const [tradeSymbol, setTradeSymbol] = useState<string | null>(null);
 
-  const totalPortfolioValue = userAssets.reduce((sum, asset) => sum + (asset.value || 0), 0);
-  const totalChange = userAssets.reduce((sum, asset) => sum + (asset.change * (asset.holdings || 0)), 0);
-  const totalChangePercent = (totalChange / (totalPortfolioValue - totalChange)) * 100;
+  useEffect(() => {
+    if (!authService.isAuthenticated()) navigate("/signin");
+  }, [navigate]);
 
-  const filteredUserAssets = userAssets.filter(asset => {
+  const { data: assetsData, isLoading } = useQuery<{ portfolio: Asset[]; market: Asset[] }>({
+    queryKey: ["/api/assets"],
+    enabled: authService.isAuthenticated(),
+    refetchInterval: 30_000,
+  });
+
+  const portfolioAssets = assetsData?.portfolio || [];
+  const marketAssets = assetsData?.market || [];
+
+  const totalPortfolioValue = portfolioAssets.reduce((sum, asset) => sum + (asset.value || 0), 0);
+  const totalChange = portfolioAssets.reduce((sum, asset) => sum + (asset.change * (asset.holdings || 0)), 0);
+  const previousPortfolioValue = totalPortfolioValue - totalChange;
+  const totalChangePercent = previousPortfolioValue > 0
+    ? (totalChange / previousPortfolioValue) * 100
+    : 0;
+
+  const filteredUserAssets = portfolioAssets.filter(asset => {
     const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           asset.symbol.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = selectedAssetType === "all" || asset.type === selectedAssetType;
     return matchesSearch && matchesType;
   });
 
-  const filteredAvailableAssets = availableAssets.filter(asset => {
+  const filteredAvailableAssets = marketAssets.filter(asset => {
     const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           asset.symbol.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = selectedAssetType === "all" || asset.type === selectedAssetType;
@@ -293,7 +154,7 @@ export default function Assets() {
               <Building className="w-4 h-4 text-primary" />
             </div>
             <div className="text-2xl font-bold" data-testid="asset-types-count">
-              {new Set(userAssets.map(a => a.type)).size}
+              {new Set(portfolioAssets.map(a => a.type)).size}
             </div>
             <div className="text-sm text-muted-foreground mt-2">
               Diversified across different markets
@@ -308,7 +169,7 @@ export default function Assets() {
               <Gem className="w-4 h-4 text-primary" />
             </div>
             <div className="text-2xl font-bold" data-testid="total-holdings">
-              {userAssets.length}
+              {portfolioAssets.length}
             </div>
             <div className="text-sm text-muted-foreground mt-2">
               Individual positions
@@ -393,7 +254,7 @@ export default function Assets() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            {filteredUserAssets.map((asset, index) => (
+            {isLoading ? <p className="text-muted-foreground">Loading live portfolio...</p> : filteredUserAssets.map((asset, index) => (
               <motion.div
                 key={asset.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -464,7 +325,7 @@ export default function Assets() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            {filteredAvailableAssets.map((asset, index) => (
+            {isLoading ? <p className="text-muted-foreground">Loading live market data...</p> : filteredAvailableAssets.map((asset, index) => (
               <motion.div
                 key={asset.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -513,7 +374,7 @@ export default function Assets() {
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        <Button size="sm" data-testid={`buy-${asset.symbol}`}>
+                        <Button size="sm" data-testid={`buy-${asset.symbol}`} onClick={() => setTradeSymbol(asset.symbol)}>
                           <Plus className="w-4 h-4 mr-1" />
                           Buy
                         </Button>
@@ -529,6 +390,11 @@ export default function Assets() {
           </motion.div>
         </TabsContent>
       </Tabs>
+      <TradeDialog
+        open={tradeSymbol !== null}
+        onOpenChange={(open) => { if (!open) setTradeSymbol(null); }}
+        defaultSymbol={tradeSymbol || "AAPL"}
+      />
     </div>
   );
 }

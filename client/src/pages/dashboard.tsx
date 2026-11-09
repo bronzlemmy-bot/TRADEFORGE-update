@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartWidget } from "@/components/chart-widget";
+import { TradeDialog } from "@/components/trade-dialog";
 import { authService } from "@/lib/auth";
+import { apiRequest, ApiError, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { 
   SidebarProvider,
   Sidebar,
@@ -143,7 +146,7 @@ const sidebarNavigation = [
       {
         title: "Deposits",
         icon: PiggyBank,
-        url: "/dashboard/deposits",
+        url: "/dashboard/deposit-bitcoin",
       },
       {
         title: "Withdraw",
@@ -165,21 +168,61 @@ const sidebarNavigation = [
 ];
 
 export default function Dashboard() {
-  const [, navigate] = useLocation();
-  const [currentPage, setCurrentPage] = useState("dashboard");
+  const [location, navigate] = useLocation();
+  const [tradeOpen, setTradeOpen] = useState(false);
+  const [chartRange, setChartRange] = useState("1mo");
+  const { toast } = useToast();
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!authService.isAuthenticated()) {
       navigate("/signin");
     }
   }, [navigate]);
 
-  const { data: dashboardData, isLoading } = useQuery<DashboardData>({
+  const exportData = async () => {
+    try {
+      const res = await apiRequest("GET", "/api/user/export");
+      const payload = await res.json();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "sog-tradepro-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export ready", description: "Your account data was downloaded." });
+    } catch (error: any) {
+      toast({ title: "Export failed", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const watchlistMutation = useMutation({
+    mutationFn: async (symbol: string) => {
+      const response = await apiRequest("POST", `/api/watchlist/${encodeURIComponent(symbol)}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user/dashboard"] });
+      toast({ title: "Watchlist updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Watchlist update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { data: dashboardData, isLoading, isError, error } = useQuery<DashboardData>({
     queryKey: ["/api/user/dashboard"],
     enabled: authService.isAuthenticated(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  useEffect(() => {
+    if (error instanceof ApiError && error.status === 401) {
+      authService.removeToken();
+      queryClient.clear();
+      navigate("/signin");
+    }
+  }, [error, navigate]);
 
   const DashboardContent = () => {
     if (isLoading) {
@@ -211,12 +254,15 @@ export default function Dashboard() {
       );
     }
 
-    if (!dashboardData) {
+    if (isError || !dashboardData) {
       return (
         <div className="p-6">
           <Card className="glass-card p-8 text-center">
             <CardContent>
-              <p className="text-muted-foreground">Unable to load dashboard data</p>
+              <p className="text-destructive">Unable to load dashboard data</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {error instanceof Error ? error.message : "Please refresh and try again."}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -239,11 +285,11 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center space-x-4 mt-4 lg:mt-0">
-            <Button variant="outline" className="glass-card" data-testid="button-alerts">
+            <Button variant="outline" className="glass-card" data-testid="button-alerts" onClick={() => navigate("/dashboard/signal")}>
               <Bell className="w-4 h-4 mr-2" />
               Alerts
             </Button>
-            <Button data-testid="button-new-trade">
+            <Button data-testid="button-new-trade" onClick={() => setTradeOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               New Trade
             </Button>
@@ -268,9 +314,9 @@ export default function Dashboard() {
                   ${portfolio.totalValue.toLocaleString()}
                 </div>
                 <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-accent mr-1" />
-                  <span className="text-accent text-sm font-medium" data-testid="portfolio-change">
-                    +{portfolio.dailyPnLPercent}% (${portfolio.dailyPnL.toLocaleString()})
+                  <TrendingUp className={`w-4 h-4 mr-1 ${portfolio.dailyPnL >= 0 ? "text-accent" : "text-destructive"}`} />
+                  <span className={`text-sm font-medium ${portfolio.dailyPnL >= 0 ? "text-accent" : "text-destructive"}`} data-testid="portfolio-change">
+                    {portfolio.dailyPnLPercent >= 0 ? "+" : ""}{portfolio.dailyPnLPercent}% (${portfolio.dailyPnL.toLocaleString()})
                   </span>
                 </div>
               </CardContent>
@@ -284,13 +330,12 @@ export default function Dashboard() {
                   <h3 className="text-sm font-medium text-muted-foreground">Daily P&L</h3>
                   <TrendingUp className="w-4 h-4 text-accent" />
                 </div>
-                <div className="text-2xl font-bold" data-testid="daily-pnl">
-                  +${portfolio.dailyPnL.toLocaleString()}
+                <div className={`text-2xl font-bold ${portfolio.dailyPnL >= 0 ? "" : "text-destructive"}`} data-testid="daily-pnl">
+                  {portfolio.dailyPnL >= 0 ? "+" : ""}${portfolio.dailyPnL.toLocaleString()}
                 </div>
                 <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-accent mr-1" />
-                  <span className="text-accent text-sm font-medium">
-                    +{portfolio.dailyPnLPercent}%
+                  <span className={`text-sm font-medium ${portfolio.dailyPnLPercent >= 0 ? "text-accent" : "text-destructive"}`}>
+                    {portfolio.dailyPnLPercent >= 0 ? "+" : ""}{portfolio.dailyPnLPercent}%
                   </span>
                 </div>
               </CardContent>
@@ -308,7 +353,7 @@ export default function Dashboard() {
                   {portfolio.openPositions}
                 </div>
                 <div className="flex items-center mt-2">
-                  <span className="text-muted-foreground text-sm">8 Long, 4 Short</span>
+                  <span className="text-muted-foreground text-sm">Live holdings</span>
                 </div>
               </CardContent>
             </Card>
@@ -347,15 +392,22 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <CardTitle>Portfolio Performance</CardTitle>
                     <div className="flex items-center space-x-2">
-                      <Button size="sm" variant="default" data-testid="chart-period-1d">1D</Button>
-                      <Button size="sm" variant="ghost" data-testid="chart-period-1w">1W</Button>
-                      <Button size="sm" variant="ghost" data-testid="chart-period-1m">1M</Button>
-                      <Button size="sm" variant="ghost" data-testid="chart-period-1y">1Y</Button>
+                      {(["1d", "5d", "1mo", "1y"] as const).map((period) => (
+                        <Button
+                          key={period}
+                          size="sm"
+                          variant={chartRange === period ? "default" : "ghost"}
+                          data-testid={`chart-period-${period}`}
+                          onClick={() => setChartRange(period)}
+                        >
+                          {period.toUpperCase()}
+                        </Button>
+                      ))}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ChartWidget height={320} data-testid="portfolio-chart" />
+                  <ChartWidget height={320} symbol="SPY" range={chartRange} title="S&P 500 (SPY)" />
                 </CardContent>
               </Card>
             </motion.div>
@@ -372,6 +424,9 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
+                    {recentTrades.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No trades yet. Place an order to get started.</p>
+                    )}
                     {recentTrades.map((trade: any, index: number) => (
                       <div 
                         key={trade.id} 
@@ -421,8 +476,10 @@ export default function Dashboard() {
                         <div className="text-sm text-muted-foreground">SPX</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium">{marketOverview.sp500.value}</div>
-                        <div className="text-sm text-accent">+{marketOverview.sp500.change}%</div>
+                        <div className="font-medium">{marketOverview.sp500.value.toLocaleString()}</div>
+                        <div className={`text-sm ${marketOverview.sp500.change >= 0 ? "text-accent" : "text-destructive"}`}>
+                          {marketOverview.sp500.change >= 0 ? "+" : ""}{marketOverview.sp500.change}%
+                        </div>
                       </div>
                     </div>
 
@@ -444,7 +501,9 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-medium">{marketOverview.dow.value}</div>
-                        <div className="text-sm text-accent">+{marketOverview.dow.change}%</div>
+                        <div className={`text-sm ${marketOverview.dow.change >= 0 ? "text-accent" : "text-destructive"}`}>
+                          {marketOverview.dow.change >= 0 ? "+" : ""}{marketOverview.dow.change}%
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -462,7 +521,17 @@ export default function Dashboard() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Watchlist</CardTitle>
-                    <Button size="icon" variant="ghost" data-testid="button-add-to-watchlist">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      data-testid="button-add-to-watchlist"
+                      aria-label="Add symbol to watchlist"
+                      onClick={() => {
+                        const symbol = window.prompt("Enter a symbol to add or remove (for example, ETH)");
+                        if (symbol?.trim()) watchlistMutation.mutate(symbol.trim().toUpperCase());
+                      }}
+                      disabled={watchlistMutation.isPending}
+                    >
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>
@@ -504,7 +573,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <Button className="w-full justify-start" data-testid="quick-action-place-order">
+                    <Button className="w-full justify-start" data-testid="quick-action-place-order" onClick={() => setTradeOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Place Order
                     </Button>
@@ -512,7 +581,7 @@ export default function Dashboard() {
                       <BarChart3 className="w-4 h-4 mr-2" />
                       Market Analysis
                     </Button>
-                    <Button variant="outline" className="w-full justify-start glass-card" data-testid="quick-action-export-data">
+                    <Button variant="outline" className="w-full justify-start glass-card" data-testid="quick-action-export-data" onClick={exportData}>
                       <Download className="w-4 h-4 mr-2" />
                       Export Data
                     </Button>
@@ -536,7 +605,7 @@ export default function Dashboard() {
                 <TrendingUp className="text-white text-sm" />
               </div>
               <span className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                TradePro
+                SOG TradePro
               </span>
             </div>
           </SidebarHeader>
@@ -550,7 +619,7 @@ export default function Dashboard() {
                     {group.items.map((item) => (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
-                          isActive={item.isActive}
+                          isActive={location === item.url}
                           onClick={() => navigate(item.url)}
                           data-testid={`sidebar-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
                         >
@@ -575,6 +644,7 @@ export default function Dashboard() {
           <DashboardContent />
         </SidebarInset>
       </SidebarProvider>
+      <TradeDialog open={tradeOpen} onOpenChange={setTradeOpen} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import type { SigninUser } from "@shared/schema";
 export default function Signin() {
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<SigninUser>({
@@ -36,7 +37,7 @@ export default function Signin() {
       return response.json();
     },
     onSuccess: (data) => {
-      authService.setToken(data.token);
+      authService.setToken(data.token, rememberMe);
       toast({
         title: "Welcome back!",
         description: "Successfully signed in to your account",
@@ -79,7 +80,7 @@ export default function Signin() {
         <Card className="glass-card">
           <CardContent className="p-8">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" autoComplete="on">
                 <FormField
                   control={form.control}
                   name="email"
@@ -90,6 +91,7 @@ export default function Signin() {
                         <Input
                           {...field}
                           type="email"
+                          autoComplete="username"
                           placeholder="Enter your email"
                           className="bg-input border-border"
                           data-testid="input-email"
@@ -111,6 +113,7 @@ export default function Signin() {
                           <Input
                             {...field}
                             type={showPassword ? "text" : "password"}
+                            autoComplete="current-password"
                             placeholder="Enter your password"
                             className="bg-input border-border pr-10"
                             data-testid="input-password"
@@ -138,14 +141,21 @@ export default function Signin() {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="remember" data-testid="checkbox-remember" />
+                    <Checkbox
+                      id="remember"
+                      checked={rememberMe}
+                      onCheckedChange={(checked) => setRememberMe(checked === true)}
+                      data-testid="checkbox-remember"
+                    />
                     <label htmlFor="remember" className="text-sm text-muted-foreground">
                       Remember me
                     </label>
                   </div>
-                  <Button variant="link" className="p-0 h-auto text-sm" data-testid="link-forgot-password">
-                    Forgot password?
-                  </Button>
+                  <Link href="/forgot-password">
+                    <Button variant="link" className="p-0 h-auto text-sm" data-testid="link-forgot-password">
+                      Forgot password?
+                    </Button>
+                  </Link>
                 </div>
 
                 <Button

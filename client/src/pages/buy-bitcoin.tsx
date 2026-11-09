@@ -139,6 +139,14 @@ export default function BuyBitcoin() {
 
   const popularPlatforms = filteredPlatforms.filter(p => p.popular);
   const otherPlatforms = filteredPlatforms.filter(p => !p.popular);
+  const platformUrls: Record<string, string> = {
+    coinbase: "https://www.coinbase.com/",
+    binance: "https://www.binance.com/en/buy",
+    kraken: "https://www.kraken.com/",
+    cashapp: "https://cash.app/",
+    gemini: "https://www.gemini.com/",
+    strike: "https://strike.me/",
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -261,6 +269,7 @@ export default function BuyBitcoin() {
 
                     <Button 
                       className="w-full mt-4" 
+                      onClick={() => window.open(platformUrls[platform.id], "_blank", "noopener,noreferrer")}
                       data-testid={`buy-on-${platform.id}`}
                     >
                       <ExternalLink className="w-4 h-4 mr-2" />
@@ -362,6 +371,7 @@ export default function BuyBitcoin() {
 
                     <Button 
                       className="w-full mt-4" 
+                      onClick={() => window.open(platformUrls[platform.id], "_blank", "noopener,noreferrer")}
                       data-testid={`buy-on-${platform.id}`}
                     >
                       <ExternalLink className="w-4 h-4 mr-2" />

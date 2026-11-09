@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   CreditCard, 
   ArrowLeft,
@@ -65,18 +66,8 @@ export default function WithdrawPage() {
 
   const withdrawMutation = useMutation({
     mutationFn: async (withdrawData: any) => {
-      const token = authService.getToken();
-      const response = await fetch("/api/wallet/withdraw", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify(withdrawData),
-      });
-      
+      const response = await apiRequest("POST", "/api/wallet/withdraw", withdrawData);
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Withdrawal failed");
       return result;
     },
     onSuccess: () => {

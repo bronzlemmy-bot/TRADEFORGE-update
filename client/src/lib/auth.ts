@@ -8,26 +8,33 @@ interface AuthResponse {
   message: string;
 }
 
+const TOKEN_KEY = "authToken";
+
 export const authService = {
-  setToken: (token: string) => {
-    localStorage.setItem('authToken', token);
+  setToken: (token: string, remember = false) => {
+    const targetStorage = remember ? localStorage : sessionStorage;
+    const otherStorage = remember ? sessionStorage : localStorage;
+    otherStorage.removeItem(TOKEN_KEY);
+    targetStorage.setItem(TOKEN_KEY, token);
   },
 
   getToken: (): string | null => {
-    return localStorage.getItem('authToken');
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
   },
 
   removeToken: () => {
-    localStorage.removeItem('authToken');
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
   },
 
   isAuthenticated: (): boolean => {
-    const token = authService.getToken();
-    return !!token;
+    return Boolean(authService.getToken());
   },
 
-  getAuthHeaders: () => {
+  getAuthHeaders: (): Record<string, string> => {
     const token = authService.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   },
 };
+
+export type { AuthResponse };

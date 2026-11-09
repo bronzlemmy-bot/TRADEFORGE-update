@@ -18,6 +18,10 @@ export function Navbar() {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/about", label: "About" },
+    { href: "/services", label: "Services" },
+    { href: "/contact", label: "Contact Us" },
+    { href: "/faq", label: "FAQ" },
+    { href: "/admin/signin", label: "Admin Portal" },
   ];
 
   return (
@@ -30,7 +34,7 @@ export function Navbar() {
               <TrendingUp className="text-white text-sm" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              TradePro
+              SOG TradePro
             </span>
           </Link>
 

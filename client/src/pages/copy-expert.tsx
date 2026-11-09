@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authService } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Users, 
   TrendingUp, 
@@ -59,14 +60,7 @@ export default function CopyExpertPage() {
 
   const followMutation = useMutation({
     mutationFn: async (expertId: string) => {
-      const token = authService.getToken();
-      const response = await fetch(`/api/copy-experts/${expertId}/follow`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) throw new Error("Failed to follow expert");
+      const response = await apiRequest("POST", `/api/copy-experts/${expertId}/follow`);
       return response.json();
     },
     onSuccess: () => {
@@ -76,16 +70,7 @@ export default function CopyExpertPage() {
 
   const copyTradeMutation = useMutation({
     mutationFn: async ({ expertId, amount }: { expertId: string; amount: number }) => {
-      const token = authService.getToken();
-      const response = await fetch(`/api/copy-experts/${expertId}/copy`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount }),
-      });
-      if (!response.ok) throw new Error("Failed to start copy trading");
+      const response = await apiRequest("POST", `/api/copy-experts/${expertId}/copy`, { amount });
       return response.json();
     },
     onSuccess: () => {
